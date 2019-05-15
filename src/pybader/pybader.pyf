@@ -1,0 +1,51 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+
+python module bader_run__user__routines 
+    interface bader_run_user_interface 
+        subroutine callback(nb,ni,bc,bi,bd,bp,ic,iv,imsd,vc,vv) 
+ ! in :pybader:pybader.f90:bader_wrap:bader_run:unknown_interface
+            integer, intent(in) :: nb
+            integer, intent(in),check(shape(ic,0)==ni),depend(ic) :: ni
+            real(kind=q2) dimension(nb), intent(in),depend(nb) :: bc
+            integer intent(in), dimension(nb), intent(in),depend(nb) :: bi
+            real(kind=q2) dimension(nb), intent(in),depend(nb) :: bd
+            real(kind=q2) dimension(nb,3), intent(in),depend(nb) :: bp
+            real(kind=q2) dimension(ni), intent(in) :: ic
+            real(kind=q2) dimension(ni), intent(in),depend(ni) :: iv
+            real(kind=q2) dimension(ni), intent(in),depend(ni) :: imsd
+            real(kind=q2) intent(in) :: vv
+            real(kind=q2) intent(in) :: vc
+        end subroutine callback
+        subroutine mask(vol,m) 
+ ! in :pybader:pybader.f90:bader_wrap:bader_run:unknown_interface
+            integer, intent(in),check(shape(m,1)),depend(m) :: vol=shape(m,1)
+            real(kind=q2) dimension(2,vol),intent(in) :: m
+        end subroutine mask
+    end interface bader_run_user_interface
+end python module bader_run__user__routines
+python module pybader ! in 
+    interface  ! in :pybader
+        module bader_wrap ! in :pybader:pybader.f90
+            use kind_mod
+            use interface_mod
+            subroutine bader_run(nx,ny,nz,lat,ni,rho,rrho,ions,arg,callback,mask) ! in :pybader:pybader.f90:bader_wrap
+                use bader_run__user__routines
+                integer, optional,intent(in),check(shape(rho,0)==nx),depend(rho) :: nx=shape(rho,0)
+                integer, optional,intent(in),check(shape(rho,1)==ny),depend(rho) :: ny=shape(rho,1)
+                integer, optional,intent(in),check(shape(rho,2)==nz),depend(rho) :: nz=shape(rho,2)
+                real(kind=q2) dimension(3,3),intent(in) :: lat
+                integer, optional,intent(in),check(shape(ions,0)==ni),depend(ions) :: ni=shape(ions,0)
+                real(kind=q2) dimension(nx,ny,nz),intent(in) :: rho
+                real(kind=q2) dimension(nx,ny,nz),intent(in),depend(nx,ny,nz) :: rrho
+                real(kind=q2) dimension(ni,3),intent(in) :: ions
+                character*128 intent(in) :: arg
+                external callback
+                external mask
+            end subroutine bader_run
+        end module bader_wrap
+    end interface 
+end python module pybader
+
+! This file was auto-generated with f2py (version:2).
+! See http://cens.ioc.ee/projects/f2py2e/
