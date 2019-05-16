@@ -161,7 +161,7 @@ MODULE interface_mod
     opts%vacval = 1E-3
     opts%bader_opt = opts%bader_neargrid
     opts%quit_opt = opts%quit_known
-    opts%refine_edge_itrs = -2
+    opts%refine_edge_itrs = -1
     opts%bader_flag = .TRUE.
     opts%voronoi = .FALSE.
     opts%dipole = .FALSE.
