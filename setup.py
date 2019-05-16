@@ -32,8 +32,6 @@ fort_config.add_extension('pybader',
 )
 #-- End pyBader -------------------------------------------------------#
 
-print(py_config)
-
 setup(**{
         **py_config['metadata'],
         **py_config['options'],
