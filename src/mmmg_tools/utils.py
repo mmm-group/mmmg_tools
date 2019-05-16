@@ -19,8 +19,7 @@ class sparray():
         self.shape = shape
         self._data = {}
         if data is not None:
-            for d in data.T:
-                self._data[int(d[0])] = d[1]
+            self._data = {int(k): v for k, v in data.T}
 
     def __repr__(self):
         return f'{self.__class__}({self.__dict__})'
