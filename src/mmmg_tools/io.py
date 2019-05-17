@@ -74,5 +74,5 @@ def read_cube(filename):
         if natoms < 0:
             for ds in dataset[1:]:
                 dataset[0] = np.add(dataset[0],ds)
-        data = {'total': dataset[0]/units}
+        data = {'total': dataset[0]}
         return (poscar, data, {})
