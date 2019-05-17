@@ -1,5 +1,5 @@
 import numpy as np
-from pymatgen.io.vasp.outputs import Chgcar as cc, Locpot as lc
+from pymatgen.io.vasp.outputs import Chgcar as cc, Locpot as lp
 from pymatgen.io.vasp.outputs import VolumetricData as vd
 from pymatgen.io.vasp.inputs import Poscar as pc
 from pymatgen.core import Site, FloatWithUnit, Structure as st
@@ -27,7 +27,9 @@ class Charge(cc):
         """
         if ftype.lower() == 'cube' or filename.split('.')[-1] == 'cube':
             poscar, data, data_aug = read_cube(filename)
-            data /= FloatWithUnit(1,'bohr^3').to('ang^3') / poscar.structure.lattice.volume
+            data = {k: v / 
+                    (FloatWithUnit(1,'bohr^3').to('ang^3') / 
+                        poscar.structure.lattice.volume) for k, v in data.items()}
         elif ftype.lower() == 'chgcar':
             poscar, data, data_aug = vd.parse_file(filename)
         return Charge(poscar, data, data_aug=data_aug)
@@ -140,3 +142,27 @@ class Structure(pc):
                     coords_are_cartesian=True,
                     properties=s.properties)
 
+class Potential(lp):
+    """
+    Potential file object.
+
+    Supported file-types:
+        - LOCPOT
+        - cube
+    """
+
+    @staticmethod
+    def from_file(filename, ftype='LOCPOT'):
+        """
+        Read in data from locpot or cube file.
+
+        args:
+            filename (str): path to file.
+            ftype (str): See class doc for supported file-types. Default = LOCPOT.
+        """
+        if ftype.lower() == 'cube' or filename.split('.')[-1] == 'cube':
+            poscar, data, data_aug = read_cube(filename)
+            data = {k: v / FloatWithUnit(1,'bohr^3').to('ang^3') for k, v in data.items()}
+        elif ftype.lower() == 'chgcar':
+            poscar, data, data_aug = vd.parse_file(filename)
+        return Potential(poscar, data)
