@@ -152,7 +152,7 @@ class Potential(lp):
     """
 
     @classmethod
-    def from_file(filename, ftype='LOCPOT'):
+    def from_file(cls, filename, ftype='LOCPOT'):
         """
         Read in data from locpot or cube file.
 
@@ -163,6 +163,6 @@ class Potential(lp):
         if ftype.lower() == 'cube' or filename.split('.')[-1] == 'cube':
             poscar, data, data_aug = read_cube(filename)
             data = {k: v / FloatWithUnit(1,'bohr^3').to('ang^3') for k, v in data.items()}
-        elif ftype.lower() == 'chgcar':
+        elif ftype.lower() == 'locpot':
             poscar, data, data_aug = vd.parse_file(filename)
         return cls(poscar, data)
