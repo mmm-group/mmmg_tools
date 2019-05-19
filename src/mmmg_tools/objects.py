@@ -16,8 +16,8 @@ class Charge(cc):
         - cube
     """
 
-    @staticmethod
-    def from_file(filename, ftype='CHGCAR'):
+    @classmethod
+    def from_file(cls, filename, ftype='CHGCAR'):
         """
         Read in data from chgcar or cube file.
 
@@ -32,7 +32,7 @@ class Charge(cc):
                         poscar.structure.lattice.volume) for k, v in data.items()}
         elif ftype.lower() == 'chgcar':
             poscar, data, data_aug = vd.parse_file(filename)
-        return Charge(poscar, data, data_aug=data_aug)
+        return cls(poscar, data, data_aug=data_aug)
 
     def bader_calc(self, rho=None, ref=None, args=None):
         """
@@ -62,8 +62,8 @@ class Structure(pc):
         - POSCAR
     """
 
-    @staticmethod
-    def from_file(filename, ftype='POSCAR'):
+    @classmethod
+    def from_file(cls, filename, ftype='POSCAR'):
         """
         Read in structure from file.
 
@@ -75,7 +75,7 @@ class Structure(pc):
             with open(filename,'r') as f:
                 poscar = pc.from_string(f.read())
             data = poscar.as_dict()
-        return Structure(st.from_dict(data['structure']),
+        return cls(st.from_dict(data['structure']),
                 comment = data['comment'],
                 selective_dynamics = data['selective_dynamics'],
                 true_names = data['true_names'],
@@ -151,7 +151,7 @@ class Potential(lp):
         - cube
     """
 
-    @staticmethod
+    @classmethod
     def from_file(filename, ftype='LOCPOT'):
         """
         Read in data from locpot or cube file.
@@ -165,4 +165,4 @@ class Potential(lp):
             data = {k: v / FloatWithUnit(1,'bohr^3').to('ang^3') for k, v in data.items()}
         elif ftype.lower() == 'chgcar':
             poscar, data, data_aug = vd.parse_file(filename)
-        return Potential(poscar, data)
+        return cls(poscar, data)
