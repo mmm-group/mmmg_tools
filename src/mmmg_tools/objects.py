@@ -2,7 +2,7 @@ import numpy as np
 from pymatgen.io.vasp.outputs import Chgcar as cc, Locpot as lp
 from pymatgen.io.vasp.outputs import VolumetricData as vd
 from pymatgen.io.vasp.inputs import Poscar as pc
-from pymatgen.core import Site, FloatWithUnit, Structure as st
+from pymatgen.core import Site, FloatWithUnit, Structure as st, Lattice, PeriodicSite
 from .io import read_cube
 from .interfaces import Bader
 from .pybader import bader_wrap as bw
@@ -141,6 +141,43 @@ class Structure(pc):
                     mirror_site - coords,
                     coords_are_cartesian=True,
                     properties=s.properties)
+
+    def set_vacuum(self, vacuum, add_pb_atoms=False):
+        """
+        Sets the vacuum in the z-axis of a Structure.
+
+        args:
+            vacuum (float): Amount of vacuum to add.
+            ad_pb_atoms (bool): wether to append the boundary atoms. Default = False
+        """
+
+        if add_pb_atoms: 
+            gen = (s for s in self.structure.sites 
+                    if np.round(s.z) in (0, np.round(s.lattice.c)))
+            for s in gen:
+                coord = s.frac_coords
+                coord[2] += 1 if s.c < .5 else -1
+                self.structure.append(s.specie, coord, properties=s.properties)
+
+        l = float('inf')
+        h = .0
+
+        for s in self.structure.sites:
+            l = s.z if s.z < l else l
+            h = s.z if s.z > h else h
+
+        s = self.structure
+        l = Lattice.from_lengths_and_angles(
+                abc = [s.lattice.a, s.lattice.b, (h - l + vacuum)],
+                ang = s.lattice.angles)
+        new_sites = []
+        for site in s.sites:
+            new_site = PeriodicSite(site.species, site.coords, l,
+                    properties=site.properties, coords_are_cartesian=True,
+                    to_unit_cell=False)
+            new_sites.append(new_site)
+        self.structure._sites = new_sites
+        self.structure._lattice = l
 
 class Potential(lp):
     """
