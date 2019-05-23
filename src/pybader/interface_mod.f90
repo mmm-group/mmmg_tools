@@ -10,9 +10,9 @@ MODULE interface_mod
 ! contents:                                                            !
 !                                                                      !
 !   31 :: main_wrap                                                    !
-!  113 :: output                                                       ! 
-!  145 :: parse_args                                                   !
-!  329 :: build_charge                                                 !
+!  112 :: output                                                       ! 
+!  142 :: parse_args                                                   !
+!  315 :: build_charge                                                 !
 !                                                                      !
 !----------------------------------------------------------------------!
 
@@ -154,7 +154,7 @@ MODULE interface_mod
 
     TYPE(options_obj) :: opts
     CHARACTER(LEN=128) :: args
-    INTEGER :: p,ip,it,ierror
+    INTEGER :: p,ip,it
 
     ! Default values
     opts%vac_flag = .FALSE.
@@ -169,6 +169,7 @@ MODULE interface_mod
     opts%badertol = 1E-3
     opts%stepsize = 0.0_q2
     opts%critpoints = .FALSE.
+    opts%badermasks = .FALSE.
 
     p = 1
     DO 
@@ -278,6 +279,10 @@ MODULE interface_mod
         IF (it == ip) it = lnblnk(args) + 1
         READ(args(ip+2:it),*) opts%badertol
 
+      ! Bader masks
+      ELSEIF (args(ip:ip+1) == '-p') THEN
+        opts%badermasks = .TRUE.
+
       ! Refine edge iterations  -- change this to a flag once working
       ELSEIF (args(ip:ip+1) == '-r') THEN
         it = index(args(ip+1:),'-')+ip
@@ -286,12 +291,12 @@ MODULE interface_mod
           & .OR. index(args(ip:it),'auto') /= 0) THEN
           opts%refine_edge_itrs=-1
         ELSE
-          READ(args(ip+2:it),'(I16)',iostat=ierror) opts%refine_edge_itrs
-          IF (ierror /= 0) THEN
+          READ(args(ip+2:it-1),'(I16)') opts%refine_edge_itrs
+          IF (ip+2 == it-1) THEN
             ip = it
             it = index(args(ip+1:),'-')+ip
             IF (it == ip) it = lnblnk(args) + 1
-            READ(args(ip-1:it),'(I16)') opts%refine_edge_itrs
+            READ(args(ip-1:it-1),'(I16)') opts%refine_edge_itrs
           END IF
         END IF
 

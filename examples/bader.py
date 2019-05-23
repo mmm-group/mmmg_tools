@@ -27,6 +27,8 @@ if __name__ == '__main__':
         help='Stepsize.')
     psr.add_argument('-t', required=False, type=float,
         help='Significant Bader volume tolerance.')
+    psr.add_argument('-p', required=False, const='', action='store_const',
+        help='Output masks of Bader volumes.')
     args = psr.parse_args()
 
     calc_args = ''

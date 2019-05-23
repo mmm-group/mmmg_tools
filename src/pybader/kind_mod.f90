@@ -67,7 +67,7 @@ MODULE kind_mod
     INTEGER :: quit_opt, quit_max = 0, quit_known = 1
     INTEGER :: refine_edge_itrs
     LOGICAL :: bader_flag, voronoi, dipole, ldos_flag
-    LOGICAL :: vac_flag, critpoints
+    LOGICAL :: vac_flag, critpoints, badermasks
   END TYPE options_obj
 
 END MODULE kind_mod

@@ -10,10 +10,10 @@ MODULE weight_mod
 ! contents:                                                            !
 !                                                                      !
 !   43 :: bader_weight_calc                                            !
-!  307 :: ws_voronoi                                                   ! 
-!  427 :: incell                                                       !
-!  496 :: sort_weight                                                  !
-!  538 :: sort_vert                                                    !
+!  319 :: ws_voronoi                                                   ! 
+!  484 :: incell                                                       !
+!  508 :: sort_weight                                                  !
+!  550 :: sort_vert                                                    !
 !                                                                      !
 !----------------------------------------------------------------------!
 
@@ -252,7 +252,7 @@ MODULE weight_mod
       END DO
       bdr%mnum = c1
       CALL reallocate_mask(bdr,c1)
-      CALL mask(c1,bdr%mask)
+      IF (opts%badermasks) CALL mask(c1,bdr%mask)
       DEALLOCATE(bdr%mask)
     END DO
     bdr%volchg = bdr%volchg / REAL(chgval%nrho,q2)
@@ -295,7 +295,6 @@ MODULE weight_mod
     CALL assign_chg2atom(bdr, ions)
 
     ! Calculate atomic volumes from bader volumes
-
     ALLOCATE(bdr%ionvol(ions%nions))
     bdr%ionvol = 0.0
 

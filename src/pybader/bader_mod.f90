@@ -64,11 +64,9 @@ MODULE bader_mod
     INTEGER :: n1, n2, n3, i, path_volnum, tenths_done
     INTEGER :: cr, count_max, t1, t2, c1, c2
     INTEGER :: ref_itrs = 1
-
     REAL(q2),DIMENSION(3) :: voxlen
     REAL(q2) :: vol
     TYPE(charge_obj) :: chgtemp
-
     EXTERNAL mask
 
     CALL SYSTEM_CLOCK(t1,cr,count_max)
@@ -231,37 +229,39 @@ MODULE bader_mod
     END DO
     bdr%volchg = bdr%volchg/REAL(chgval%nrho,q2)
 
-    WRITE(*,'(/,2x,A)') 'CALCULATING BADER MASKS'
-    WRITE(*,'(2x,A)')   '               0  10  25  50  75  100'
-    WRITE(*,'(2x,A,$)') 'PERCENT DONE:  **'
-    tenths_done = 0
-    DO i = 1, bdr%nvols
-      IF ((i*10/bdr%nvols) > tenths_done) THEN
-        tenths_done = (i*10/bdr%nvols)
-        WRITE(*,'(A,$)') '**'
-      END IF
-      ALLOCATE(bdr%mask(2,bdr%vol(i)))
-      bdr%mnum = bdr%vol(i)
-      c1 = 0
-      c2 = 0
-      DO n1 = 1, chgval%npts(1)
-        DO n2 = 1, chgval%npts(2)
-          DO n3 = 1, chgval%npts(3)
-            IF (bdr%volnum(n1,n2,n3) == i) THEN
-              c2 = c2 + 1
-              IF (bdr%mnum < c2) CALL reallocate_mask(bdr,2*bdr%mnum)
-              bdr%mask(1,c2) = REAL(c1,q2)
-              bdr%mask(2,c2) = 1._q2
-            END IF
-            c1 = c1 + 1
+    IF (opts%badermasks) THEN
+      WRITE(*,'(/,2x,A)') 'CALCULATING BADER MASKS'
+      WRITE(*,'(2x,A)')   '               0  10  25  50  75  100'
+      WRITE(*,'(2x,A,$)') 'PERCENT DONE:  **'
+      tenths_done = 0
+      DO i = 1, bdr%nvols
+        IF ((i*10/bdr%nvols) > tenths_done) THEN
+          tenths_done = (i*10/bdr%nvols)
+          WRITE(*,'(A,$)') '**'
+        END IF
+        ALLOCATE(bdr%mask(2,bdr%vol(i)))
+        bdr%mnum = bdr%vol(i)
+        c1 = 0
+        c2 = 0
+        DO n1 = 1, chgval%npts(1)
+          DO n2 = 1, chgval%npts(2)
+            DO n3 = 1, chgval%npts(3)
+              IF (bdr%volnum(n1,n2,n3) == i) THEN
+                c2 = c2 + 1
+                IF (bdr%mnum < c2) CALL reallocate_mask(bdr,2*bdr%mnum)
+                bdr%mask(1,c2) = REAL(c1,q2)
+                bdr%mask(2,c2) = 1._q2
+              END IF
+              c1 = c1 + 1
+            END DO
           END DO
         END DO
+        bdr%mnum = c2
+        CALL reallocate_mask(bdr,c2)
+        CALL mask(bdr%vol(i),bdr%mask)
+        DEALLOCATE(bdr%mask)
       END DO
-      bdr%mnum = c2
-      CALL reallocate_mask(bdr,c2)
-      CALL mask(bdr%vol(i),bdr%mask)
-      DEALLOCATE(bdr%mask)
-    END DO
+    END IF
 
     ALLOCATE(bdr%nnion(bdr%nvols))
     ALLOCATE(bdr%iondist(bdr%nvols))
