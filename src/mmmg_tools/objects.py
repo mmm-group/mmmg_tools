@@ -1,9 +1,22 @@
 import numpy as np
-from pymatgen.io.vasp.outputs import Chgcar as cc, Locpot as lp
-from pymatgen.io.vasp.outputs import VolumetricData as vd
+from pymatgen.io.vasp.outputs import (
+    Chgcar as cc, 
+    Locpot as lp,
+    VolumetricData as vd,
+    Wavecar as wc,
+)
 from pymatgen.io.vasp.inputs import Poscar as pc
-from pymatgen.core import Site, FloatWithUnit, Structure as st, Lattice, PeriodicSite
-from .io import read_cube
+from pymatgen.core import (
+    Site, 
+    FloatWithUnit, 
+    Structure as st, 
+    Lattice, 
+    PeriodicSite,
+)
+from .io import (
+    read_cube,
+    read_wavecar,
+)
 from .interfaces import Bader
 from .pybader import bader_wrap as bw
 
@@ -27,9 +40,10 @@ class Charge(cc):
         """
         if ftype.lower() == 'cube' or filename.split('.')[-1] == 'cube':
             poscar, data, data_aug = read_cube(filename)
-            data = {k: v / 
-                    (FloatWithUnit(1,'bohr^3').to('ang^3') / 
-                        poscar.structure.lattice.volume) for k, v in data.items()}
+            data = {
+                k: (v / (FloatWithUnit(1,'bohr^3').to('ang^3') / 
+                    poscar.structure.lattice.volume) for k, v in data.items())
+            }
         elif ftype.lower() == 'chgcar':
             poscar, data, data_aug = vd.parse_file(filename)
         return cls(poscar, data, data_aug=data_aug)
@@ -203,3 +217,34 @@ class Potential(lp):
         elif ftype.lower() == 'locpot':
             poscar, data, data_aug = vd.parse_file(filename)
         return cls(poscar, data)
+
+class Wavefunction(wc):
+    """
+    Wave-function object.
+
+    Supported file-types:
+        - WAVECAR
+    """
+
+    def __init__(self, encut, bands, Gpoints, coeffs, _nbmax):
+        self._C = 0.262465832
+        self.spin = 2 if bands.is_spin_polarized else 1
+        self.nk = len(bands.kpoints)
+        self.nb = bands.nb_bands
+        self.encut = encut 
+        self.efermi = bands.efermi
+        self._lattice = bands.lattice_rec
+        self.a = self._lattice.reciprocal_lattice._matrix
+        self.b = self._lattice._matrix
+        self.kpoints = bands.kpoints
+        self.band_energy = bands.bands
+        self.Gpoints = Gpoints
+        self.coeffs = coeffs
+        self._nbmax = _nbmax
+        self.ng = 4 * _nbmax
+
+    @classmethod
+    def from_file(cls, filename='WAVECAR', ftype='WAVECAR'):
+        if ftype.lower() == 'wavecar':
+            encut, bands, Gpoints, coeffs, _nbmax = read_wavecar(filename)
+        return cls(encut, bands, Gpoints, coeffs, _nbmax)
