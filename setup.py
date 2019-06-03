@@ -22,7 +22,6 @@ src = [
 ]
 fort_config.add_library('bader',
         sources = lib,
-        extra_f90_compile_args = ['-O2']
 )
 fort_config.add_extension('pybader',
         sources = src,
