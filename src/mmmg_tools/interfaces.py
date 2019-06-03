@@ -50,7 +50,7 @@ class Bader():
             which can be filled and then written to file.
             """
             imask = sparray(self.dim)
-            gen = (vol for vol,ion in enumerate(ion_map) if ion == site)
+            gen = (vol for vol,ion in enumerate(ion_map) if ion - 1 == site)
             for vol in gen:
                 imask +=  self.bader[vol]
             return imask
