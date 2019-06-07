@@ -244,6 +244,7 @@ def read_wavecar(filename='WAVECAR'):
                         np.fromfile(f, dtype=np.float64, count=recl8 - 2 * nplane)
 
                     if Gflag:
+                        data = data * np.sqrt(0.5) if inb != 0 else data * np.exp(-1 / (2 * np.pi))
                         data = np.concatenate((data, np.conj(data[1:])))
                         for iGp in range(len(Gpoints[ink])):
                             if iGp < len(Gptemp):
