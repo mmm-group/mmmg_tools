@@ -88,15 +88,12 @@ def read_cube(filename):
         data = {'total': dataset[0]}
         return (poscar, data, {})
 
-def read_wavecar(filename='WAVECAR'):
+def read_wavecar(filename):
     """
     Information is extracted from the given WAVECAR
 
     Args:
-        filename (str): input file (default: WAVECAR)
-        verbose (bool): determines whether processing information is shown
-        precision (str): determines how fine the fft mesh is (normal or
-                         accurate), only the first letter matters
+        filename (str): path to input file
     """
 
     # c = 0.26246582250210965422
@@ -244,6 +241,12 @@ def read_wavecar(filename='WAVECAR'):
                         np.fromfile(f, dtype=np.float64, count=recl8 - 2 * nplane)
 
                     if Gflag:
+                        """ 
+                        This is confusing but bear with me, occupations for most bands
+                        are twice as large so need factor of sqrt(1/2). This isn't true 
+                        for the first band it seems this has some weird factor ~ the one
+                        used.
+                        """
                         data = data * np.sqrt(0.5) if inb != 0 else data * np.exp(-1 / (2 * np.pi))
                         data = np.concatenate((data, np.conj(data[1:])))
                         for iGp in range(len(Gpoints[ink])):
