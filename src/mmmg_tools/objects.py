@@ -13,6 +13,7 @@ from pymatgen.core import (
     Lattice, 
     PeriodicSite,
 )
+from pymatgen.electronic_structure.core import Spin
 from .io import (
     read_cube,
     read_wavecar,
@@ -46,6 +47,62 @@ class Charge(cc):
         elif ftype.lower() == 'chgcar':
             poscar, data, data_aug = vd.parse_file(filename)
         return cls(poscar, data, data_aug=data_aug)
+
+    @classmethod
+    def from_wavefunction(cls, filename, ftype='WAVECAR', structure=None, bands=None, erange=None):
+        """
+        Create Charge object from wavefunctions. 
+        
+        See pymatgen.io.vasp.outputs.Wavecar.get_parchg() for reasoning as to why the charge is 
+        incorrect.
+        
+        args:
+            filename (str): path to wavefunction file.
+            ftype (str): see Wavefunction class doc for supported file-types. Defualt = WAVECAR.
+            structure (Structure): associated structure object if required.
+            band (List): list of bands to include by band index. Defualt = All <= Ef.
+            erange (list): list containing upper and lower bounds of included band energies
+                           relative to Ef. Default = All <= Ef.
+        """
+        if bands is not None and erange is not None:
+            print("Both bands and erange are set, only using bands.")
+        wav = Wavefunction.from_file(filename, ftype=ftype, structure=structure)
+        data = {'total': np.zeros(tuple(wav.ng*2))}
+        if bands is not None:
+            data['diff'] = np.zeros(tuple(wav.ng*2))
+            chg = cc(wav.structure, data)
+            for ik in range(wav.nk):
+                for ib in bands:
+                    chg += wav.get_parchg(ik, ib)
+            return cls(wav.structure, chg.data.copy())
+        elif erange is not None:
+            emin = erange[0] + wav.efermi
+            emax = erange[1] + wav.efermi
+        else:
+            emin = -float('inf')
+            emax = wav.efermi
+        chg_up = cc(wav.structure, data.copy())
+        if wav.spin == 2:
+            chg_down = cc(wav.structure, data.copy())
+            for ik in range(wav.nk):
+                for ib in range(wav.nb):
+                    if emin <= wav.band_energy[Spin.up][ib][ik] <= emax:
+                        chg_up += wav.get_parchg(ik, ib, spin=0)
+                    elif wav.band_energy[Spin.up][ib][ik] > emax:
+                        break
+                    if emin <= wav.band_energy[Spin.down][ib][ik] <= emax:
+                            chg_down += wav.get_parchg(ik, ib, spin=1)
+                    elif wav.band_energy[Spin.down][ib][ik] > emax:
+                        break
+            data['total'] = chg_up.data['total'] + chg_down.data['total']
+            data['diff'] = chg_up.data['total'] - chg_down.data['total']
+        else:
+            for ik in range(wav.nk):
+                for ib in range(wav.nb):
+                    if emin <= wav.band_energy[Spin.up][ib][ik] <= emax:
+                        chg_up += wav.get_parchg(ik, ib, spin=0)
+            data = chg_up.data
+        return cls(wav.structure, data)
 
     def bader_calc(self, rho=None, ref=None, args=None):
         """
@@ -161,7 +218,7 @@ class Structure(pc):
 
         args:
             vacuum (float): Amount of vacuum to add.
-            ad_pb_atoms (bool): wether to append the boundary atoms. Default = False
+            ad_pb_atoms (bool): whether to append the boundary atoms. Default = False
         """
 
         if add_pb_atoms: 
@@ -204,7 +261,7 @@ class Potential(lp):
     @classmethod
     def from_file(cls, filename, ftype='LOCPOT'):
         """
-        Read in data from locpot or cube file.
+        Read in data from a potential file (LOCPOT).
 
         args:
             filename (str): path to file.
@@ -222,17 +279,19 @@ class Wavefunction(wc):
     Wave-function object.
 
     Supported file-types:
-        - WAVECAR
+        - WAVECAR (requires Structure)
     """
 
-    def __init__(self, encut, bands, Gpoints, coeffs, _nbmax):
+    def __init__(self, encut, bands, Gpoints, coeffs, _nbmax, structure):
         self._C = 0.262465832
+        self._bands = bands
+        self._lattice = bands.lattice_rec
+        self._structure = structure
         self.spin = 2 if bands.is_spin_polarized else 1
         self.nk = len(bands.kpoints)
         self.nb = bands.nb_bands
         self.encut = encut 
         self.efermi = bands.efermi
-        self._lattice = bands.lattice_rec
         self.a = self._lattice.reciprocal_lattice._matrix
         self.b = self._lattice._matrix
         self.kpoints = bands.kpoints
@@ -242,79 +301,50 @@ class Wavefunction(wc):
         self._nbmax = _nbmax
         self.ng = 4 * _nbmax
 
+    @property
+    def structure(self):
+        return self._structure
+
     @classmethod
-    def from_file(cls, filename='WAVECAR', ftype='WAVECAR'):
-        if ftype.lower() == 'wavecar':
-            encut, bands, Gpoints, coeffs, _nbmax = read_wavecar(filename)
-        return cls(encut, bands, Gpoints, coeffs, _nbmax)
-
-def get_parchg(self, poscar, kpoint, band, spin=None, phase=False,
-                   scale=2):
+    def from_file(cls, filename, ftype='WAVECAR', structure=None):
         """
-        Generates a Chgcar object, which is the charge density of the specified
-        wavefunction.
+        Read in wavefunctions from file. 
+        
+        Some file formats require a structure object to be passed also as the file
+        doesn't contain this information.
 
-        This function generates a Chgcar object with the charge density of the
-        wavefunction specified by band and kpoint (and spin, if the WAVECAR
-        corresponds to a spin-polarized calculation). The phase tag is a
-        feature that is not present in VASP. For a real wavefunction, the phase
-        tag being turned on means that the charge density is multiplied by the
-        sign of the wavefunction at that point in space. A warning is generated
-        if the phase tag is on and the chosen kpoint is not Gamma.
+        args:
+            filename (str): path to file.
+            ftype (str): See class doc for supported file-types. Default = WAVECAR.
+            structure (Structure): a structure object if required by file-type.
+        """
+        if ftype.lower() == 'wavecar':
+            if structure is None:
+                raise ValueError('structure arg is required for WAVECAR file-types.')
+            encut, bands, Gpoints, coeffs, _nbmax = read_wavecar(filename)
+        return cls(encut, bands, Gpoints, coeffs, _nbmax, structure)
 
-        Note: Augmentation from the PAWs is NOT included in this function. The
-        maximal charge density will differ from the PARCHG from VASP, but the
-        qualitative shape of the charge density will match.
+    def get_parchg(self, kpoint, band, spin=None, phase=False, scale=2):
+        """
+        Wrapper for pymatgen function of same name changing the returned object.
 
         Args:
-            poscar (pymatgen.io.vasp.inputs.Poscar): Poscar object that has the
-                                structure associated with the WAVECAR file
             kpoint (int):   the index of the kpoint for the wavefunction
             band (int):     the index of the band for the wavefunction
             spin (int):     optional argument to specify the spin. If the
-                                Wavecar has ISPIN = 2, spin == None generates a
-                                Chgcar with total spin and magnetization, and
-                                spin == {0, 1} specifies just the spin up or
-                                down component.
+                            Wavecar has ISPIN = 2, spin == None generates a
+                            chgcar with total spin and magnetization, and
+                            spin == {0, 1} specifies just the spin up or
+                            down component.
             phase (bool):   flag to determine if the charge density is
-                                multiplied by the sign of the wavefunction.
-                                Only valid for real wavefunctions.
+                            multiplied by the sign of the wavefunction.
+                            Only valid for real wavefunctions.
             scale (int):    scaling for the FFT grid. The default value of 2 is
-                                at least as fine as the VASP default.
+                            at least as fine as the VASP default.
+
         Returns:
             Charge object
         """
 
-        if phase and not np.all(self.kpoints[kpoint] == 0.):
-            warnings.warn('phase == True should only be used for the Gamma '
-                          'kpoint! I hope you know what you\'re doing!')
-
-        # scaling of ng for the fft grid, need to restore value at the end
-        temp_ng = self.ng
-        self.ng = self.ng * scale
-        N = np.prod(self.ng)
-
-        data = {}
-        if self.spin == 2:
-            if spin is not None:
-                wfr = np.fft.ifftn(self.fft_mesh(kpoint, band, spin=spin)) * N
-                den = np.abs(np.conj(wfr) * wfr)
-                if phase:
-                    den = np.sign(np.real(wfr)) * den
-                data['total'] = den
-            else:
-                wfr = np.fft.ifftn(self.fft_mesh(kpoint, band, spin=0)) * N
-                denup = np.abs(np.conj(wfr) * wfr)
-                wfr = np.fft.ifftn(self.fft_mesh(kpoint, band, spin=1)) * N
-                dendn = np.abs(np.conj(wfr) * wfr)
-                data['total'] = denup + dendn
-                data['diff'] = denup - dendn
-        else:
-            wfr = np.fft.ifftn(self.fft_mesh(kpoint, band)) * N
-            den = np.abs(np.conj(wfr) * wfr)
-            if phase:
-                den = np.sign(np.real(wfr)) * den
-            data['total'] = den
-
-        self.ng = temp_ng
-        return Charge(poscar, data)
+        _chg = super().get_parchg(self.structure, kpoint, band, spin=spin, phase=phase, scale=scale)
+        return Charge(self.structure, _chg.data.copy())
