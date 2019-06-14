@@ -9,10 +9,11 @@ MODULE interface_mod
 !                                                                      !
 ! contents:                                                            !
 !                                                                      !
-!   31 :: main_wrap                                                    !
-!  112 :: output                                                       ! 
-!  142 :: parse_args                                                   !
-!  315 :: build_charge                                                 !
+!   32 :: main_wrap                                                    !
+!  113 :: output                                                       ! 
+!  143 :: parse_args                                                   !
+!  316 :: build_charge                                                 !
+!  401 :: lnblnk                                                       !
 !                                                                      !
 !----------------------------------------------------------------------!
 
@@ -396,5 +397,15 @@ MODULE interface_mod
 
   RETURN
   END SUBROUTINE build_charge
+
+  FUNCTION lnblnk(s)
+    ! INTEL Compilers seem to be missing this function
+    CHARACTER(LEN=128) :: s
+    INTEGER :: lnblnk
+
+    DO lnblnk = len(s), 1, -1
+      IF (s(lnblnk:lnblnk) .NE. ' ') RETURN
+    END DO
+  END FUNCTION lnblnk
 
 END MODULE interface_mod
