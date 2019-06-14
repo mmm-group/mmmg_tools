@@ -40,7 +40,7 @@ MODULE kind_mod
     REAL(q2) :: stepsize, tol
     REAL(q2) :: vacchg, vacvol
     INTEGER nvols, pnum, bnum, pdim, bdim, refine_edge_itrs, mnum
-  END TYPE
+  END TYPE bader_obj
 
   TYPE :: charge_obj
     REAL(q2),ALLOCATABLE,DIMENSION(:,:,:) :: rho
@@ -50,7 +50,7 @@ MODULE kind_mod
     REAL(q2),DIMENSION(3) :: i_npts
     INTEGER,DIMENSION(3) :: npts
     INTEGER :: nrho
-  END TYPE
+  END TYPE charge_obj
 
   TYPE :: ions_obj
     REAL(q2),ALLOCATABLE,DIMENSION(:,:) :: r_car,r_dir,r_lat
@@ -58,7 +58,7 @@ MODULE kind_mod
     REAL(q2),DIMENSION(3,3) :: lattice,dir2car,car2dir
     INTEGER :: nions
     REAL(q2) :: scalefactor
-  END TYPE
+  END TYPE ions_obj
   
   TYPE :: options_obj
     REAL(q2) :: badertol, stepsize, vacval
