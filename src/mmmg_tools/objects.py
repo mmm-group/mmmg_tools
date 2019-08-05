@@ -1,4 +1,6 @@
 import numpy as np
+from multiprocessing.pool import ThreadPool as Pool
+from tqdm.auto import tqdm
 from pymatgen.io.vasp.outputs import (
     Chgcar as cc, 
     Locpot as lp,
@@ -49,60 +51,51 @@ class Charge(cc):
         return cls(poscar, data, data_aug=data_aug)
 
     @classmethod
-    def from_wavefunction(cls, filename, ftype='WAVECAR', structure=None, bands=None, erange=None):
+    def from_wav(cls, wavefunction, kweight, blist=None, brange=None, klist=None, spin=None):
         """
         Create Charge object from wavefunctions. 
         
-        See pymatgen.io.vasp.outputs.Wavecar.get_parchg() for reasoning as to why the charge is 
-        incorrect.
+        See pymatgen.io.vasp.outputs.Wavecar.get_parchg() for reasoning as to
+        why the charge is incorrect.
         
         args:
-            filename (str): path to wavefunction file.
-            ftype (str): see Wavefunction class doc for supported file-types. Defualt = WAVECAR.
-            structure (Structure): associated structure object if required.
-            band (List): list of bands to include by band index. Defualt = All <= Ef.
-            erange (list): list containing upper and lower bounds of included band energies
-                           relative to Ef. Default = All <= Ef.
+            wavefunction (object): Wavefunction object.
+            kweight (List): list of kpoint weights.
+            blist (List):   list of bands to include by band index. 
+                            Defualt = All <= Ef.
+            brange (List):  list containing upper and lower bounds of included 
+                            band energies relative to Ef. Default = All <= Ef.
+            klist (List):   list of kpoints to include. Default = All.
+            spin (int):     0 or 1 to choose spin up or down. Default Both.
+
         """
-        if bands is not None and erange is not None:
-            print("Both bands and erange are set, only using bands.")
-        wav = Wavefunction.from_file(filename, ftype=ftype, structure=structure)
-        data = {'total': np.zeros(tuple(wav.ng*2))}
-        if bands is not None:
-            data['diff'] = np.zeros(tuple(wav.ng*2))
-            chg = cc(wav.structure, data)
-            for ik in range(wav.nk):
-                for ib in bands:
-                    chg += wav.get_parchg(ik, ib)
-            return cls(wav.structure, chg.data.copy())
-        elif erange is not None:
-            emin = erange[0] + wav.efermi
-            emax = erange[1] + wav.efermi
+        sdict, kdict = {}, {}
+        if klist is None:
+            klist = range(wavefunction.nk)
+        if spin is None:
+            spin = [0, 1]
+        if blist is not None:
+            for s in list(spin):
+                for ik in klist:
+                    kdict[ik] = blist
+                sdict[s] = kdict
+        elif brange is not None:
+            emin, emax = tuple(np.add(brange, wavefunction.efermi))
+            for s in list(spin):
+                sp = Spin.up if s == 0 else Spin.down
+                for ik in klist:
+                    kdict[ik] = [ib for ib in range(wavefunction.nb) if emin <= wavefunction.band_energy[sp][ib][ik] <= emax]
+                sdict[s] = kdict
         else:
             emin = -float('inf')
-            emax = wav.efermi
-        chg_up = cc(wav.structure, data.copy())
-        if wav.spin == 2:
-            chg_down = cc(wav.structure, data.copy())
-            for ik in range(wav.nk):
-                for ib in range(wav.nb):
-                    if emin <= wav.band_energy[Spin.up][ib][ik] <= emax:
-                        chg_up += wav.get_parchg(ik, ib, spin=0)
-                    elif wav.band_energy[Spin.up][ib][ik] > emax:
-                        break
-                    if emin <= wav.band_energy[Spin.down][ib][ik] <= emax:
-                            chg_down += wav.get_parchg(ik, ib, spin=1)
-                    elif wav.band_energy[Spin.down][ib][ik] > emax:
-                        break
-            data['total'] = chg_up.data['total'] + chg_down.data['total']
-            data['diff'] = chg_up.data['total'] - chg_down.data['total']
-        else:
-            for ik in range(wav.nk):
-                for ib in range(wav.nb):
-                    if emin <= wav.band_energy[Spin.up][ib][ik] <= emax:
-                        chg_up += wav.get_parchg(ik, ib, spin=0)
-            data = chg_up.data
-        return cls(wav.structure, data)
+            emax = 0
+            for s in list(spin):
+                sp = Spin.up if s == 0 else Spin.down
+                for ik in klist:
+                    kdict[ik] = [ib for ib in range(wavefunction.nb) if emin <= wavefunction.band_energy[sp][ib][ik] <= emax]
+                sdict[s] = kdict
+        data = wavefunction.get_density(sdict, kweight)
+        return cls(wavefunction.structure, data)
 
     def bader_calc(self, rho=None, ref=None, args=None):
         """
@@ -131,6 +124,16 @@ class Structure(pc):
     Supported file-types:
         - POSCAR
     """
+
+    @classmethod
+    def from_structure(cls, structure):
+        """
+        Create Structure object from pymatgen.core.Structure.
+
+        args:
+            structure (object): Pymatgen structure object.
+        """
+        return cls(structure)
 
     @classmethod
     def from_file(cls, filename, ftype='POSCAR'):
@@ -348,3 +351,35 @@ class Wavefunction(wc):
 
         _chg = super().get_parchg(self.structure, kpoint, band, spin=spin, phase=phase, scale=scale)
         return Charge(self.structure, _chg.data.copy())
+
+    def get_density(self, sdict, kweight, scale=2):
+        """
+        Produce density for Charge object.
+        """
+        data, den= {}, {}
+        ng = tuple(self.ng * scale)
+        for spin, kdict in sdict.items():
+            if all(s == 1 for s in [spin, self.spin]):
+                return data
+            den[spin] = np.zeros(ng)
+            origin = [l // 2 for l in ng]
+            for ik, nb in tqdm(kdict.items()):
+                coeff = self.coeffs[spin][ik] if self.spin == 2 else self.coeffs[ik]
+                gpoint = np.add(origin, self.Gpoints[ik].astype(np.int))
+                pool = Pool(len(nb))
+                def wavegen(ib):
+                    mesh = np.zeros(ng, dtype=np.complex)
+                    for g, c in zip(gpoint, coeff[ib]):
+                        mesh[tuple(g)] = c
+                    wfr = np.fft.ifftn(mesh) * np.prod(ng)
+                    return np.abs(np.conj(wfr) * wfr)
+                for density in pool.imap_unordered(wavegen, nb):
+                    den[spin] += density
+                den[spin] =  np.multiply(den[spin], kweight[ik])
+                pool.close()
+        if len(sdict) == 2:
+            data['total'] = den[0] + den[1]
+            data['diff'] = den[0] - den[1]
+        else:
+            data['total'] = den[spin]
+        return data
