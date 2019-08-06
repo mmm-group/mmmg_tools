@@ -363,7 +363,9 @@ class Wavefunction(wc):
                 return data
             den[spin] = np.zeros(ng)
             origin = [l // 2 for l in ng]
+            print(f"Spin {Spin(np.sign((-2*spin)+1))._name_}: ")
             for ik, nb in tqdm(kdict.items()):
+                rho = np.zeros(ng)
                 coeff = self.coeffs[spin][ik] if self.spin == 2 else self.coeffs[ik]
                 gpoint = np.add(origin, self.Gpoints[ik].astype(np.int))
                 pool = Pool(len(nb))
@@ -374,8 +376,8 @@ class Wavefunction(wc):
                     wfr = np.fft.ifftn(mesh) * np.prod(ng)
                     return np.abs(np.conj(wfr) * wfr)
                 for density in pool.imap_unordered(wavegen, nb):
-                    den[spin] += density
-                den[spin] =  np.multiply(den[spin], kweight[ik])
+                    rho += density
+                den[spin] +=  np.multiply(rho, kweight[ik])
                 pool.close()
         if len(sdict) == 2:
             data['total'] = den[0] + den[1]
