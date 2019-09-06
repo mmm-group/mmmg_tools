@@ -271,7 +271,7 @@ class Potential(lp):
         """
         if ftype.lower() == 'cube' or filename.split('.')[-1] == 'cube':
             poscar, data, data_aug = read_cube(filename)
-            unit = FloatWithUnit(1,'Ha').to('eV') / FloatWithUnit(1,'bohr^3').to('ang^3') 
+            unit = FloatWithUnit(-1, 'Ha').to('eV') 
             data = {k: v * unit for k, v in data.items()}
         elif ftype.lower() == 'locpot':
             poscar, data, data_aug = vd.parse_file(filename)
