@@ -48,8 +48,7 @@ def read_cube(filename):
             l = f.readline().split()
             element = int(l[0])
             coord = ArrayWithUnit(
-                    [float(v)+(0.5/npts[i]) for i,v in enumerate(l[-3:])],
-                    'bohr')
+                    [float(v) for i,v in enumerate(l[-3:])], 'bohr')
             sites.append(PeriodicSite(
                 (l[0]),coord.to('ang'),
                 lattice,
