@@ -32,6 +32,10 @@ class Charge(cc):
         - cube
     """
 
+    def __init__(self, structure, data, data_aug=None, voxel_origin=(0.,)*3):
+        self._voxel_origin = voxel_origin
+        cc.__init__(self, Structure.from_structure(structure.structure), data, data_aug)
+
     @classmethod
     def from_file(cls, filename, ftype='CHGCAR'):
         """
@@ -45,9 +49,11 @@ class Charge(cc):
             poscar, data, data_aug = read_cube(filename)
             unit = poscar.structure.lattice.volume / FloatWithUnit(1, 'bohr^3').to('ang^3')
             data = {k: v * unit for k, v in data.items()}
+            vox = (.5,) * 3
         elif ftype.lower() == 'chgcar':
             poscar, data, data_aug = vd.parse_file(filename)
-        return cls(poscar, data, data_aug=data_aug)
+            vox = (0.,) * 3
+        return cls(poscar, data, data_aug=data_aug, voxel_origin=vox)
 
     @classmethod
     def from_wav(cls, wavefunction, kweight, blist=None, brange=None, klist=None, spin=None):
@@ -94,7 +100,11 @@ class Charge(cc):
                     kdict[ik] = [ib for ib in range(wavefunction.nb) if emin <= wavefunction.band_energy[sp][ib][ik] <= emax]
                 sdict[s] = kdict
         data = wavefunction.get_density(sdict, kweight)
-        return cls(wavefunction.structure, data)
+        return cls(wavefunction.structure, data, voxel_origin=(0.)*3)
+
+    @property
+    def voxel_origin(self):
+        return self._voxel_origin
 
     def bader_calc(self, rho=None, ref=None, args=None):
         """
@@ -106,7 +116,9 @@ class Charge(cc):
             args (str): Command line arguments. Default = None.
         """
         lat = self.structure.lattice.matrix
-        ions = self.structure.frac_coords
+        ion_shift = np.divide(self.voxel_origin, self.dim)
+        print(ion_shift)
+        ions = np.add(self.structure.frac_coords, ion_shift)
         self.bader = Bader(self.structure, self.dim)
         if rho is None:
             rho = self.data['total']
@@ -115,6 +127,12 @@ class Charge(cc):
         if args is None:
             args = ''
         bw.bader_run(lat, rho, ref, ions, args, self.bader, self.bader.masks)
+
+    def to_structure(self):
+        """
+        Produces Structure object.
+        """
+        return Structure.from_structure(self.structure)
 
 class Structure(pc):
     """
@@ -269,6 +287,10 @@ class Potential(lp):
         - cube
     """
 
+    def __init__(self, structure, data, voxel_origin=(0.,)*3):
+        self._voxel_origin = voxel_origin
+        lp.__init__(self, Structure.from_structure(structure.structure), data)
+
     @classmethod
     def from_file(cls, filename, ftype='LOCPOT'):
         """
@@ -282,9 +304,21 @@ class Potential(lp):
             poscar, data, data_aug = read_cube(filename)
             unit = FloatWithUnit(1, 'Ha').to('eV') 
             data = {k: v * unit for k, v in data.items()}
+            vox = (.5,) * 3
         elif ftype.lower() == 'locpot':
             poscar, data, data_aug = vd.parse_file(filename)
-        return cls(poscar, data)
+            vox = (0.,) * 3
+        return cls(poscar, data, voxel_origin=vox)
+
+    @property
+    def voxel_origin(self):
+        return self._voxel_origin
+
+    def to_structure(self):
+        """
+        Produces Structure object.
+        """
+        return Structure.from_structure(self.structure)
 
 class Wavefunction(wc):
     """
