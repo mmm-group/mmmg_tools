@@ -251,6 +251,15 @@ class Structure(pc):
         self.structure._sites = new_sites
         self.structure._lattice = l
 
+    def sort(self, reverse=False):
+        """
+        Organise sites list based on site species.
+
+        args:
+            reverse (bool): sorts reverse alphabetically. Default = False
+        """
+        self.structure._sites.sort(key=lambda site: site.specie, reverse=reverse) 
+
 class Potential(lp):
     """
     Potential file object.
