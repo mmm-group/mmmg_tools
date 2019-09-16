@@ -117,7 +117,6 @@ class Charge(cc):
         """
         lat = self.structure.lattice.matrix
         ion_shift = np.divide(self.voxel_origin, self.dim)
-        print(ion_shift)
         ions = np.add(self.structure.frac_coords, ion_shift)
         self.bader = Bader(self.structure, self.dim)
         if rho is None:
