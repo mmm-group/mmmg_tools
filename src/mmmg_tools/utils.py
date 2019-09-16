@@ -158,3 +158,13 @@ class sparray():
         """
         out = np.zeros(self.shape)
         return self.__add__(out)
+
+    def apply(self, obj):
+        """
+        Apply the mask to a Charge or Potential object returning new object.
+
+        args:
+            obj (object): Charge, Potential or any pymatgen VolumetricData object.
+        """
+        data = {k: self.__mul__(v).fill() for k, v in obj.data.items()}
+        return obj.__class__(obj.structure, data)
