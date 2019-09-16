@@ -43,7 +43,7 @@ class Charge(cc):
         """
         if ftype.lower() == 'cube' or filename.split('.')[-1] == 'cube':
             poscar, data, data_aug = read_cube(filename)
-            unit = poscar.structure.lattice.volume / FloatWithUnit(1, 'borh^3').to('ang^3')
+            unit = poscar.structure.lattice.volume / FloatWithUnit(1, 'bohr^3').to('ang^3')
             data = {k: v * unit for k, v in data.items()}
         elif ftype.lower() == 'chgcar':
             poscar, data, data_aug = vd.parse_file(filename)
