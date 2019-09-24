@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.signal import resample
 import pandas as pd
 from multiprocessing.pool import ThreadPool as Pool
 from multiprocessing import cpu_count
@@ -335,14 +336,15 @@ class Potential(lp):
         """
         return Structure.from_structure(self.structure)
 
-    def onsite_electrostatic(self, Z, r=1.2, sites=None):
+    def onsite_electrostatic(self, Z, r=1.2, sites=None, upsample=1):
         """
         Calculates the on-site potential for atoms within the structure.
 
         args:
             Z (float/dict): normalisation for s-orbital, can be supplied as dict for species.
-            r (floati/dict): radius ofsphere around atom, can a dict for species.
+            r (float/dict): radius ofsphere around atom, can a dict for species.
             sites (list): list of int or sites to get onsite potential of.
+            upsample (int): scale to upsample the data by using scipy.resample.  
         """
         if sites is None:
             sites = self.structure.sites
@@ -354,25 +356,29 @@ class Potential(lp):
         if isinstance(r, float):
             _set = set([s.specie.symbol for s in sites])
             r = {k: r for k in _set}
+        data = self.data['total'].copy()
+        for i, dim in enumerate(np.multiply(self.dim, upsample)):
+            data = resample(data, dim, axis=i)
         onsite = list()
         specie = list()
+        lat = self.voxel_lattice.scale(self.voxel_lattice.volume / upsample**3)
         for site in tqdm(sites):
             specie.append(site.specie.symbol)
             z = Z[specie[-1]]
-            _c = self.voxel_lattice.get_fractional_coords(site.to_unit_cell().coords)
+            _c = lat.get_fractional_coords(site.to_unit_cell().coords)
             coords = np.array(_c) - np.array(_c, dtype=int)
-            _,dist,_, image = self.voxel_lattice.get_points_in_sphere(
+            _,dist,_, image = lat.get_points_in_sphere(
                 [self.voxel_origin],
-                self.voxel_lattice.get_cartesian_coords(coords),
+                lat.get_cartesian_coords(coords),
                 r[specie[-1]],
                 zip_results=False,
             )
-            idx = np.mod(np.add(np.array(_c, dtype=int), image), self.dim)
-            poten = self.data['total'][idx[:,0], idx[:,1], idx[:,2]]
+            idx = np.mod(np.add(np.array(_c, dtype=int), image), np.multiply(self.dim, upsample))
+            poten = data[idx[:,0], idx[:,1], idx[:,2]]
             onsite.append(np.multiply(np.exp(-2 * z * dist), poten).sum())
         columns = ['Species', 'Electrostatic Potential']
         index = [self.structure._sites.index(site) for site in sites]
-        onsite = np.multiply(onsite, z**3 * self.voxel_lattice.volume / np.pi)
+        onsite = np.multiply(onsite, z**3 * lat.volume / np.pi)
         data = zip(specie, onsite)
         return pd.DataFrame(data, index, columns)
 
