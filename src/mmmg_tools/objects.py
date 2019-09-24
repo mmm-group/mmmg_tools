@@ -1,5 +1,7 @@
 import numpy as np
+import pandas as pd
 from multiprocessing.pool import ThreadPool as Pool
+from multiprocessing import cpu_count
 from tqdm.auto import tqdm
 from pymatgen.io.vasp.outputs import (
     Chgcar as cc, 
@@ -34,6 +36,9 @@ class Charge(cc):
 
     def __init__(self, structure, data, data_aug=None, voxel_origin=(0.,)*3):
         self._voxel_origin = voxel_origin
+        self._voxel_lattice = Lattice(
+            np.divide(structure.structure.lattice._matrix, data['total'].shape)
+        )
         cc.__init__(self, Structure.from_structure(structure.structure), data, data_aug)
 
     @classmethod
@@ -105,6 +110,10 @@ class Charge(cc):
     @property
     def voxel_origin(self):
         return self._voxel_origin
+
+    @property
+    def voxel_lattice(self):
+        return self._voxel_lattice
 
     def bader_calc(self, rho=None, ref=None, args=None):
         """
@@ -288,6 +297,9 @@ class Potential(lp):
 
     def __init__(self, structure, data, voxel_origin=(0.,)*3):
         self._voxel_origin = voxel_origin
+        self._voxel_lattice = Lattice(
+            np.divide(structure.structure.lattice._matrix, data['total'].shape)
+        )
         lp.__init__(self, Structure.from_structure(structure.structure), data)
 
     @classmethod
@@ -313,11 +325,56 @@ class Potential(lp):
     def voxel_origin(self):
         return self._voxel_origin
 
+    @property
+    def voxel_lattice(self):
+        return self._voxel_lattice
+
     def to_structure(self):
         """
         Produces Structure object.
         """
         return Structure.from_structure(self.structure)
+
+    def onsite_electrostatic(self, Z, r=1.2, sites=None):
+        """
+        Calculates the on-site potential for atoms within the structure.
+
+        args:
+            Z (float/dict): normalisation for s-orbital, can be supplied as dict for species.
+            r (floati/dict): radius ofsphere around atom, can a dict for species.
+            sites (list): list of int or sites to get onsite potential of.
+        """
+        if sites is None:
+            sites = self.structure.sites
+        else:
+            sites = [self.structure._sites[s] if isinstance(s, int) else s for s in sites]
+        if isinstance(Z, float):
+            _set = set([s.specie.symbol for s in sites])
+            Z = {k: Z for k in _set}
+        if isinstance(r, float):
+            _set = set([s.specie.symbol for s in sites])
+            r = {k: r for k in _set}
+        onsite = list()
+        specie = list()
+        for site in tqdm(sites):
+            specie.append(site.specie.symbol)
+            z = Z[specie[-1]]
+            _c = self.voxel_lattice.get_fractional_coords(site.to_unit_cell().coords)
+            coords = np.array(_c) - np.array(_c, dtype=int)
+            _,dist,_, image = self.voxel_lattice.get_points_in_sphere(
+                [self.voxel_origin],
+                self.voxel_lattice.get_cartesian_coords(coords),
+                r[specie[-1]],
+                zip_results=False,
+            )
+            idx = np.mod(np.add(np.array(_c, dtype=int), image), self.dim)
+            poten = self.data['total'][idx[:,0], idx[:,1], idx[:,2]]
+            onsite.append(np.multiply(np.exp(-2 * z * dist), poten).sum())
+        columns = ['Species', 'Electrostatic Potential']
+        index = [self.structure._sites.index(site) for site in sites]
+        onsite = np.multiply(onsite, z**3 * self.voxel_lattice.volume / np.pi)
+        data = zip(specie, onsite)
+        return pd.DataFrame(data, index, columns)
 
 class Wavefunction(wc):
     """
@@ -410,15 +467,15 @@ class Wavefunction(wc):
                 rho = np.zeros(ng)
                 coeff = self.coeffs[spin][ik] if self.spin == 2 else self.coeffs[ik]
                 gpoint = np.add(origin, self.Gpoints[ik].astype(np.int))
-                pool = Pool(len(nb))
                 def wavegen(ib):
                     mesh = np.zeros(ng, dtype=np.complex)
                     for g, c in zip(gpoint, coeff[ib]):
                         mesh[tuple(g)] = c
                     wfr = np.fft.ifftn(mesh) * np.prod(ng)
                     return np.abs(np.conj(wfr) * wfr)
-                for density in pool.imap_unordered(wavegen, nb):
-                    rho += density
+                pool = Pool(cpu_count() - 1)
+                density = pool.map(wavegen, nb)
+                rho = np.sum(density)
                 den[spin] +=  np.multiply(rho, kweight[ik])
                 pool.close()
         if len(sdict) == 2:
