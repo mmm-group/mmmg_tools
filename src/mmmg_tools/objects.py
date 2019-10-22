@@ -83,8 +83,7 @@ class Charge(cc):
         sdict, kdict = {}, {}
         if klist is None:
             klist = range(wavefunction.nk)
-        if spin is None:
-            spin = [0, 1]
+        spin = ([0, 1] if spin is None else [spin])
         if blist is not None:
             for s in list(spin):
                 for ik in klist:
@@ -95,7 +94,10 @@ class Charge(cc):
             for s in list(spin):
                 sp = Spin.up if s == 0 else Spin.down
                 for ik in klist:
-                    kdict[ik] = [ib for ib in range(wavefunction.nb) if emin <= wavefunction.band_energy[sp][ib][ik] <= emax]
+                    kdict[ik] = [
+                        ib for ib in range(wavefunction.nb) 
+                        if emin <= wavefunction.band_energy[sp][ib][ik] <= emax
+                    ]
                 sdict[s] = kdict
         else:
             emin = -float('inf')
@@ -103,9 +105,12 @@ class Charge(cc):
             for s in list(spin):
                 sp = Spin.up if s == 0 else Spin.down
                 for ik in klist:
-                    kdict[ik] = [ib for ib in range(wavefunction.nb) if emin <= wavefunction.band_energy[sp][ib][ik] <= emax]
+                    kdict[ik] = [
+                        ib for ib in range(wavefunction.nb) 
+                        if emin <= wavefunction.band_energy[sp][ib][ik] <= emax
+                    ]
                 sdict[s] = kdict
-        data = wavefunction.get_density(sdict, kweight)
+        data = wavefunction.get_density_new(sdict, kweight)
         return cls(wavefunction.structure, data, voxel_origin=(0.)*3)
 
     @property
@@ -463,6 +468,7 @@ class Wavefunction(wc):
         """
         data, den= {}, {}
         ng = tuple(self.ng * scale)
+        Ng = np.prod(ng)
         for spin, kdict in sdict.items():
             if all(s == 1 for s in [spin, self.spin]):
                 return data
@@ -470,23 +476,24 @@ class Wavefunction(wc):
             origin = [l // 2 for l in ng]
             print(f"Spin {Spin(np.sign((-2*spin)+1))._name_}: ")
             for ik, nb in tqdm(kdict.items()):
-                rho = np.zeros(ng)
-                coeff = self.coeffs[spin][ik] if self.spin == 2 else self.coeffs[ik]
+                coeffs = np.array(
+                    self.coeffs[spin][ik] if self.spin == 2 else self.coeffs[ik]
+                )
                 gpoint = np.add(origin, self.Gpoints[ik].astype(np.int))
-                def wavegen(ib):
+                def wavgen(ib):
                     mesh = np.zeros(ng, dtype=np.complex)
-                    for g, c in zip(gpoint, coeff[ib]):
+                    for g, c in zip(gpoint, coeffs[ib]):
                         mesh[tuple(g)] = c
-                    wfr = np.fft.ifftn(mesh) * np.prod(ng)
-                    return np.abs(np.conj(wfr) * wfr)
+                    wf = np.fft.ifftn(mesh, norm='ortho')
+                    wf /= np.sqrt(np.vdot(wf, wf))
+                    return (np.conj(wf) * wf).real
                 pool = Pool(cpu_count() - 1)
-                density = pool.map(wavegen, nb)
-                rho = np.sum(density)
-                den[spin] +=  np.multiply(rho, kweight[ik])
+                rho = pool.map(wavgen, nb)
                 pool.close()
+                den[spin] +=  np.multiply(np.sum(rho, axis=0), kweight[ik])
         if len(sdict) == 2:
             data['total'] = den[0] + den[1]
             data['diff'] = den[0] - den[1]
         else:
             data['total'] = den[spin]
-        return data
+        return {k: np.multiply(v, Ng) for k, v in data.items()}
