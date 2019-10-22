@@ -292,6 +292,49 @@ class Structure(pc):
         """
         self.structure._sites.sort(key=lambda site: site.specie, reverse=reverse) 
 
+    def generalised_coordination_number(self, order:int=1, bond_cut:float=2.5, c_max:int=12):
+        """
+        Get the genealised cooordition number as presented in:
+        https://onlinelibrary.wiley.com/doi/10.1002/anie.201402958
+
+        args:
+            order: the order of the correction to the coordination number.
+            bond_cut: the distance under which to consider an atom coordinated.
+        """
+        coord = list()
+        neighbour = list()
+        for site in self.structure.sites:
+            neighbour.append(self.structure.get_neighbors(site, bond_cut, include_index=True))
+            coord.append(len(neighbour[-1]))
+# py3.8 while i:=0 < order
+        i = 0
+        while i < order:
+            new_coord = list()
+            for j, site in enumerate(self.structure.sites):
+                c = list()
+                for site in neighbour[j]:
+                    c.append(coord[site[2]] / c_max)
+                new_coord.append(np.sum(c))
+            coord = new_coord.copy()
+            i += 1
+        self.structure.add_site_property('GCN', coord)
+
+    def write_xyz(self, filename:str, site_properties:list=[]):
+        """
+        Write Structure as an xyz.
+
+        args:
+            filename: where to save file to.
+            site_properties: list of properties to append to file as extra columns.
+        """
+        string = f"{np.sum(self.natoms)}\n{'  '.join(set(self.site_symbols))}"
+        for site in self.structure.sites:
+            string += f"\n{site.specie}  {site.x}  {site.y}  {site.z}"
+            for prop in site_properties:
+                string += f"  {site.__dict__['properties'][prop]}"
+        with open(filename, 'wt') as f:
+            f.write(string)
+
 class Potential(lp):
     """
     Potential file object.
