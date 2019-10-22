@@ -25,6 +25,7 @@ from .io import (
 )
 from .interfaces import Bader
 from .pybader import bader_wrap as bw
+from functools import partial
 
 class Charge(cc):
     """
@@ -83,15 +84,15 @@ class Charge(cc):
         sdict, kdict = {}, {}
         if klist is None:
             klist = range(wavefunction.nk)
-        spin = ([0, 1] if spin is None else [spin])
+        spin = list([0, 1] if spin is None else [spin])
         if blist is not None:
-            for s in list(spin):
+            for s in spin:
                 for ik in klist:
                     kdict[ik] = blist
                 sdict[s] = kdict
         elif brange is not None:
             emin, emax = tuple(np.add(brange, wavefunction.efermi))
-            for s in list(spin):
+            for s in spin:
                 sp = Spin.up if s == 0 else Spin.down
                 for ik in klist:
                     kdict[ik] = [
@@ -102,7 +103,7 @@ class Charge(cc):
         else:
             emin = -float('inf')
             emax = 0
-            for s in list(spin):
+            for s in spin:
                 sp = Spin.up if s == 0 else Spin.down
                 for ik in klist:
                     kdict[ik] = [
@@ -110,7 +111,7 @@ class Charge(cc):
                         if emin <= wavefunction.band_energy[sp][ib][ik] <= emax
                     ]
                 sdict[s] = kdict
-        data = wavefunction.get_density_new(sdict, kweight)
+        data = wavefunction.get_density(sdict, kweight)
         return cls(wavefunction.structure, data, voxel_origin=(0.)*3)
 
     @property
@@ -292,10 +293,13 @@ class Structure(pc):
         """
         self.structure._sites.sort(key=lambda site: site.specie, reverse=reverse) 
 
-    def generalised_coordination_number(self, order:int=1, bond_cut:float=2.5, c_max:int=12):
+    def generalised_coordination_number(self, order:int=1, bond_cut:float=2.5):
         """
         Get the genealised cooordition number as presented in:
         https://onlinelibrary.wiley.com/doi/10.1002/anie.201402958
+        
+        Requires c_max as a site property: 
+        self.structure.add_site_property('c_max', [6 for s in self.structure.sites])
 
         args:
             order: the order of the correction to the coordination number.
@@ -313,7 +317,7 @@ class Structure(pc):
             for j, site in enumerate(self.structure.sites):
                 c = list()
                 for site in neighbour[j]:
-                    c.append(coord[site[2]] / c_max)
+                    c.append(coord[site[2]] / site.c_max)
                 new_coord.append(np.sum(c))
             coord = new_coord.copy()
             i += 1
@@ -480,31 +484,6 @@ class Wavefunction(wc):
             encut, bands, Gpoints, coeffs, _nbmax = read_wavecar(filename)
         return cls(encut, bands, Gpoints, coeffs, _nbmax, structure)
 
-    def get_parchg(self, kpoint, band, spin=None, phase=False, scale=2):
-        """
-        Wrapper for pymatgen function of same name changing the returned object.
-
-        Args:
-            kpoint (int):   the index of the kpoint for the wavefunction
-            band (int):     the index of the band for the wavefunction
-            spin (int):     optional argument to specify the spin. If the
-                            Wavecar has ISPIN = 2, spin == None generates a
-                            chgcar with total spin and magnetization, and
-                            spin == {0, 1} specifies just the spin up or
-                            down component.
-            phase (bool):   flag to determine if the charge density is
-                            multiplied by the sign of the wavefunction.
-                            Only valid for real wavefunctions.
-            scale (int):    scaling for the FFT grid. The default value of 2 is
-                            at least as fine as the VASP default.
-
-        Returns:
-            Charge object
-        """
-
-        _chg = super().get_parchg(self.structure, kpoint, band, spin=spin, phase=phase, scale=scale)
-        return Charge(self.structure, _chg.data.copy())
-
     def get_density(self, sdict, kweight, scale=2):
         """
         Produce density for Charge object.
@@ -540,3 +519,12 @@ class Wavefunction(wc):
         else:
             data['total'] = den[spin]
         return {k: np.multiply(v, Ng) for k, v in data.items()}
+
+    def real_space(self, coeffs, gpoints):
+        ng = tuple(self.ng * 2)
+        mesh = np.zeros(ng, dtype=np.complex)
+        for g, c in zip(map(tuple, gpoints), coeffs):
+            mesh[g] = c
+        wfr = np.fft.ifftn(mesh, norm='ortho')
+        wfr /= np.sqrt(np.vdot(wfr, wfr))
+        return wfr
