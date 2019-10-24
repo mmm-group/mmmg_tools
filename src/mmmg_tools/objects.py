@@ -316,8 +316,8 @@ class Structure(pc):
             new_coord = list()
             for j, site in enumerate(self.structure.sites):
                 c = list()
-                for site in neighbour[j]:
-                    c.append(coord[site[2]] / site.c_max)
+                for s in neighbour[j]:
+                    c.append(coord[s[2]] / site.c_max)
                 new_coord.append(np.sum(c))
             coord = new_coord.copy()
             i += 1
@@ -331,7 +331,9 @@ class Structure(pc):
             filename: where to save file to.
             site_properties: list of properties to append to file as extra columns.
         """
-        string = f"{np.sum(self.natoms)}\n{'  '.join(set(self.site_symbols))}"
+        lattice = ' '.join(list(self.structure.lattice.matrix.flatten().astype(str))) 
+        string = f"{np.sum(self.natoms)}"
+        string += f'\nLattice="{lattice}" pbc="T T T"'
         for site in self.structure.sites:
             string += f"\n{site.specie}  {site.x}  {site.y}  {site.z}"
             for prop in site_properties:
