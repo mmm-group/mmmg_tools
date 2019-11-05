@@ -168,3 +168,37 @@ class sparray():
         """
         data = {k: self.__mul__(v).fill() for k, v in obj.data.items()}
         return obj.__class__(obj.to_structure(), data)
+
+def rotate_to_vector(vector:list):
+    """
+    Calculate 3D rotation matrix for aligning z-vector and a vector.
+
+    args:
+        vector: 3D vector != [0, 0, 1]
+
+    returns:
+        Q: rotation matrix
+    """
+    r = np.array(vector) / np.linalg.norm(vector)
+    theta, b = np.arccos(r[2]), np.cross([0,0,1], r)
+    b = b / np.linalg.norm(b)
+    c, s = np.cos(theta / 2), np.sin(theta / 2)
+    q = [c,*np.multiply(s, b)]
+    Q = np.array([
+        [
+            q[0]**2 + q[1]**2 - q[2]**2 - q[3]**2, 
+            2 * (q[1] * q[2] - q[0] * q[3]), 
+            2 * (q[1] * q[3] + q[0] * q[2]),
+        ],
+        [
+            2 * (q[1] * q[2] + q[0] * q[3]), 
+            q[0]**2 - q[1]**2 + q[2]**2 - q[3]**2, 
+            2 * (q[2] * q[3] - q[0] * q[1]),
+        ],
+        [
+            2 * (q[1] * q[3] - q[0] * q[2]),
+            2 * (q[2] * q[3] + q[0] * q[1]),
+            q[0]**2 - q[1]**2 - q[2]**2 + q[3]**2,
+        ],
+    ])
+    return Q

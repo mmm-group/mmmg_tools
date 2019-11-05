@@ -24,6 +24,7 @@ from .io import (
     read_wavecar,
 )
 from .interfaces import Bader
+from .utils import rotate_to_vector
 from .pybader import bader_wrap as bw
 from functools import partial
 
@@ -188,7 +189,8 @@ class Structure(pc):
                 predictor_corrector = data.get("predictor_corrector", None),
                 )
 
-    def add_adsorbate(self, molecule, site, height=0, mirror_site=None, rotation=None):
+    def add_adsorbate(self, molecule, site:list, 
+        height:float=0, mirror_site:list=None, rotation:list=None):
         """
         Adosorb molecule on surface.
 
@@ -200,28 +202,7 @@ class Structure(pc):
             rotation (3x1 array): Vector to rotate the z-axis too. Default = None.
         """
         if rotation is not None:
-            r = rotation/np.linalg.norm(rotation)
-            theta, b = np.arccos(r[2]), np.cross([0,0,1],r)
-            b = b/np.linalg.norm(b)
-            c, s = np.cos(theta/2), np.sin(theta/2)
-            q = [c,*np.multiply(s,b)]
-            Q = np.array([
-                [
-                    q[0]**2 + q[1]**2 - q[2]**2 - q[3]**2, 
-                    2*(q[1]*q[2] - q[0]*q[3]), 
-                    2*(q[1]*q[3] + q[0]*q[2]),
-                ],
-                [
-                    2*(q[1]*q[2] + q[0]*q[3]), 
-                    q[0]**2 - q[1]**2 + q[2]**2 - q[3]**2, 
-                    2*(q[2]*q[3] - q[0]*q[1]),
-                ],
-                [
-                    2*(q[1]*q[3] - q[0]*q[2]),
-                    2*(q[2]*q[3] + q[0]*q[1]),
-                    q[0]**2 - q[1]**2 - q[2]**2 + q[3]**2,
-                ],
-            ])
+            Q = rotate_to_vector(rotation)
         else:
             Q = np.array([[1,0,0],[0,1,0],[0,0,1]])
 
