@@ -291,14 +291,13 @@ class Structure(pc):
         for site in self.structure.sites:
             neighbour.append(self.structure.get_neighbors(site, bond_cut, include_index=True))
             coord.append(len(neighbour[-1]))
-# py3.8 while i:=0 < order
         i = 0
         while i < order:
             new_coord = list()
             for j, site in enumerate(self.structure.sites):
                 c = list()
                 for s in neighbour[j]:
-                    c.append(coord[s[2]] / site.c_max)
+                    c.append(coord[s[2]] / s[0].c_max)
                 new_coord.append(np.sum(c))
             coord = new_coord.copy()
             i += 1
