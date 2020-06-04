@@ -1,6 +1,7 @@
-import numpy as np
-from mmmg_tools.objects import Potential
 import matplotlib.pyplot as plt
+import numpy as np
+
+from mmmg_tools.objects import Potential
 
 pot = Potential.from_file("HARTREE.cube", ftype="cube")
 z_av = pot.get_average_along_axis(2)

@@ -1,15 +1,17 @@
 import numpy as np
 
+
 class sparray():
     """
     Sparse array class for nd-arrays.
     """
-    def __init__(self,shape,data=None):
+
+    def __init__(self, shape, data=None):
         """
-        Initialise the object. 
-        
-        Data passed must be 2D array of shape (2,N) where (0,:) is an 
-        array of int corresponding to the index of the flattened array 
+        Initialise the object.
+
+        Data passed must be 2D array of shape (2,N) where (0,:) is an
+        array of int corresponding to the index of the flattened array
         and (1,:) is the value at each index.
 
         args:
@@ -24,19 +26,19 @@ class sparray():
     def __repr__(self):
         return f'{self.__class__}({self.__dict__})'
 
-    def __setitem__(self,idx,v):
+    def __setitem__(self, idx, v):
         if idx is tuple:
-            idx = np.ravel_multi_index(idx,self.shape)
+            idx = np.ravel_multi_index(idx, self.shape)
         self._data[idx] = v
 
-    def __getitem__(self,idx):
+    def __getitem__(self, idx):
         if idx is tuple:
-            idx = np.ravel_multi_index(idx,self.shape)
+            idx = np.ravel_multi_index(idx, self.shape)
         return self._data[idx]
 
-    def __delitem__(self,idx):
+    def __delitem__(self, idx):
         if idx is tuple:
-            idx = np.ravel_multi_index(idx,self.shape)
+            idx = np.ravel_multi_index(idx, self.shape)
         del(self._data[idx])
 
     @property
@@ -49,7 +51,7 @@ class sparray():
             c += v
         return c
 
-    @property 
+    @property
     def pop_percent(self):
         """
         Returns the population percentage of the sparse array.
@@ -79,11 +81,11 @@ class sparray():
         self.shape_match(other)
         out = other.copy()
         if other.__class__ == self.__class__:
-            for k,v in self._data.items():
-                out[k] = other._data.get(k,0) + v
+            for k, v in self._data.items():
+                out[k] = other._data.get(k, 0) + v
         else:
-            for k,v in self._data.items():
-                idx = np.unravel_index(k,self.shape)
+            for k, v in self._data.items():
+                idx = np.unravel_index(k, self.shape)
                 out[idx] += v
         return out
 
@@ -94,11 +96,11 @@ class sparray():
         self.shape_match(other)
         out = other.copy()
         if other.__class__ == self.__class__:
-            for k,v in self._data.items():
-                out[k] = other._data.get(k,0) + v
+            for k, v in self._data.items():
+                out[k] = other._data.get(k, 0) + v
         else:
-            for k,v in self._data.items():
-                idx = np.unravel_index(k,self.shape)
+            for k, v in self._data.items():
+                idx = np.unravel_index(k, self.shape)
                 out[idx] += v
         return out
 
@@ -109,7 +111,7 @@ class sparray():
         self.shape_match(other)
         out = other.copy()
         if other.__class__ == self.__class__:
-            for k,v in other._data.items():
+            for k, v in other._data.items():
                 out[k] = -v
         else:
             out *= -1
@@ -117,20 +119,20 @@ class sparray():
 
     def __mul__(self, other):
         """
-        Multiplies a sparse array with an array. Always returns a 
+        Multiplies a sparse array with an array. Always returns a
         sparse array.
         """
         self.shape_match(other)
         out = self.copy()
         if other.__class__ == self.__class__:
-            for k,v in self._data.items():
+            for k, v in self._data.items():
                 if other._data.has_key(k):
                     out[k] = other[k] * v
                 else:
                     del(out[k])
         else:
-            for k,v in self._data.items():
-                idx = np.unravel_index(k,self.shape)
+            for k, v in self._data.items():
+                idx = np.unravel_index(k, self.shape)
                 if other[idx] != 0:
                     out[k] = v * other[idx]
         return out
@@ -143,11 +145,11 @@ class sparray():
         self.shape_match(other)
         out = self.__class__(self.shape)
         if self.__class__ == other.__class__:
-            for k,v in other._data.items():
-                    out[k] = 1/v
+            for k, v in other._data.items():
+                out[k] = 1/v
         else:
-            for k,_ in self._data.items():
-                idx = np.unravel_index(k,self.shape)
+            for k, _ in self._data.items():
+                idx = np.unravel_index(k, self.shape)
                 if other[idx] != 0:
                     out[k] = 1/other[idx]
         return self.__mul__(out)
@@ -169,7 +171,8 @@ class sparray():
         data = {k: self.__mul__(v).fill() for k, v in obj.data.items()}
         return obj.__class__(obj.to_structure(), data)
 
-def rotate_to_vector(vector:list):
+
+def rotate_to_vector(vector: list):
     """
     Calculate 3D rotation matrix for aligning z-vector and a vector.
 
@@ -180,19 +183,19 @@ def rotate_to_vector(vector:list):
         Q: rotation matrix
     """
     r = np.array(vector) / np.linalg.norm(vector)
-    theta, b = np.arccos(r[2]), np.cross([0,0,1], r)
+    theta, b = np.arccos(r[2]), np.cross([0, 0, 1], r)
     b = b / np.linalg.norm(b)
     c, s = np.cos(theta / 2), np.sin(theta / 2)
-    q = [c,*np.multiply(s, b)]
+    q = [c, *np.multiply(s, b)]
     Q = np.array([
         [
-            q[0]**2 + q[1]**2 - q[2]**2 - q[3]**2, 
-            2 * (q[1] * q[2] - q[0] * q[3]), 
+            q[0]**2 + q[1]**2 - q[2]**2 - q[3]**2,
+            2 * (q[1] * q[2] - q[0] * q[3]),
             2 * (q[1] * q[3] + q[0] * q[2]),
         ],
         [
-            2 * (q[1] * q[2] + q[0] * q[3]), 
-            q[0]**2 - q[1]**2 + q[2]**2 - q[3]**2, 
+            2 * (q[1] * q[2] + q[0] * q[3]),
+            q[0]**2 - q[1]**2 + q[2]**2 - q[3]**2,
             2 * (q[2] * q[3] - q[0] * q[1]),
         ],
         [
