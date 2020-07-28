@@ -14,12 +14,12 @@ from pymatgen.electronic_structure.core import Spin
 from pymatgen.io.vasp.inputs import Poscar as pc
 from pymatgen.io.vasp.outputs import Chgcar as cc
 from pymatgen.io.vasp.outputs import Locpot as lp
-from pymatgen.io.vasp.outputs import VolumetricData as vd
 from pymatgen.io.vasp.outputs import Wavecar as wc
 from scipy.signal import resample
 from tqdm.auto import tqdm
 
 from .utils import rotate_to_vector
+from .io import read_wavecar
 
 
 class Charge(cc):
@@ -364,13 +364,27 @@ class Potential(lp):
             ftype (str): See class doc for supported file-types. Default = LOCPOT.
         """
         if ftype.lower() == 'cube' or filename.split('.')[-1] == 'cube':
-            poscar, data, data_aug = read_cube(filename)
+            data, lattice, atoms, info = cube.read(filename)
+            elements = info['elements']
             unit = FloatWithUnit(1, 'Ha').to('eV')
-            data = {k: v * unit for k, v in data.items()}
             vox = (.5,) * 3
         elif ftype.lower() == 'locpot':
-            poscar, data, data_aug = vd.parse_file(filename)
+            data, lattice, atoms, info = vasp.read(filename, spin_flag=True)
+            elements = info.get('elements', ['X' for _ in atoms])
+            # LOCPOT doesn't have stupid CHGCAR units
+            unit = 1 * np.dot(lattice[0], np.cross(*lattice[1:]))
+            if len(elements) != atoms.shape[0]:
+                X_str = ''
+                for i, X in enumerate(elements):
+                    X_str += f'{X} ' * info['element_nums'][i]
+                elements = X_str.strip().split(' ')
             vox = (0.,) * 3
+        lattice = Lattice(lattice)
+        poscar = Structure(
+            st(lattice, elements, atoms, coords_are_cartesian=True)
+        )
+        data = {k: v * unit for k, v in data.items()}
+        data['total'] = data.pop('charge')
         return cls(poscar, data, voxel_origin=vox)
 
     @property
@@ -402,12 +416,24 @@ class Potential(lp):
         else:
             sites = [self.structure._sites[s] if isinstance(
                 s, int) else s for s in sites]
-        if isinstance(Z, float):
+        try:
+            Z = float(Z)
             _set = set([s.specie.symbol for s in sites])
             Z = {k: Z for k in _set}
-        if isinstance(r, float):
+        except TypeError as e:
+            if isinstance(Z, dict):
+                pass
+            else:
+                raise e
+        try:
+            r = float(r)
             _set = set([s.specie.symbol for s in sites])
             r = {k: r for k in _set}
+        except TypeError as e:
+            if isinstance(r, dict):
+                pass
+            else:
+                raise e
         data = self.data['total'].copy()
         for i, dim in enumerate(np.multiply(self.dim, upsample)):
             data = resample(data, dim, axis=i)
@@ -425,13 +451,15 @@ class Potential(lp):
                 r[specie[-1]],
                 zip_results=False,
             )
-            idx = np.mod(np.add(np.array(_c, dtype=int), image),
-                         np.multiply(self.dim, upsample))
+            idx = np.zeros(image.shape, dtype=int)
+            idx[:] = np.mod(np.add(_c, image),
+                            np.multiply(self.dim, upsample))
             poten = data[idx[:, 0], idx[:, 1], idx[:, 2]]
             onsite.append(np.multiply(np.exp(-2 * z * dist), poten).sum())
+            # Ask James about this
+            onsite[-1] *= z**3 * lat.volume / np.pi
         columns = ['Species', 'Electrostatic Potential']
         index = [self.structure._sites.index(site) for site in sites]
-        onsite = np.multiply(onsite, z**3 * lat.volume / np.pi)
         data = zip(specie, onsite)
         return pd.DataFrame(data, index, columns)
 

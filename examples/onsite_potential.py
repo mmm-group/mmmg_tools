@@ -1,7 +1,7 @@
 from mmmg_tools.objects import Potential
 
 pot = Potential.from_file('LOCPOT')
-Z = {'Mg':4.825, 'O':4.775}
-r = 1.6
+r = {'Mg': 1.4, 'O': 1.6}
+Z = 1
 
-print(pot.onsite_electrostatic(Z=Z,r=r,sites=None,upsample=2))
+print(pot.onsite_electrostatic(Z=Z, r=r, sites=None, upsample=2))
